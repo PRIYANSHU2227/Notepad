@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notepad</title>
+  <meta name="description" content="Ultra-minimal notepad. A clean, blank page." />
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #111111;
+      --muted: #999999;
+      --pad: 18px;
+      --font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b0b0b; --fg:#eaeaea; --muted:#00ff66; }
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    textarea {
+      box-sizing: border-box;
+      width: 100vw;
+      height: 100vh;
+      padding: 40px var(--pad) var(--pad) var(--pad); /* top padding increased */
+      border: 0;
+      outline: none;
+      resize: none;
+      background: transparent;
+      color: inherit;
+      font: 16px/1.6 var(--font);
+      tab-size: 2;
+      caret-color: currentColor;
+    }
+    .hint {
+      position: fixed;
+      bottom: 8px; left: 50%; transform: translateX(-50%);
+      font: 12px/1 var(--font);
+      color: #00ff66;
+      font-weight: bold;
+      opacity: 0.9;
+      user-select: none;
+      pointer-events: none;
+    }
+    .topbar {
+      position: fixed; top: 8px; left: 8px; right: 8px;
+      display: flex; gap: 8px; justify-content: space-between; align-items: center;
+      font: 12px/1 var(--font); color: #00ff66;
+      pointer-events: none;
+      font-weight: bold;
+    }
+    .pill { padding: 6px 10px; border-radius: 999px; border: 1px solid #00ff66; opacity: .9; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="pill" id="status">saved</div>
+    <div class="pill">Ctrl/Cmd+S save · Ctrl/Cmd+O open · Ctrl/Cmd+N new</div>
+  </div>
+
+  <textarea id="pad" autofocus spellcheck="false" placeholder=""></textarea>
+
+  <div class="hint">Drag & drop a .txt file to load</div>
+
+  <input type="file" id="file" class="hidden" accept="text/plain,.txt" />
+
+  <script>
+    (function() {
+      const STORAGE_KEY = 'ultra_notepad_text_v1';
+      const pad = document.getElementById('pad');
+      const fileInput = document.getElementById('file');
+      const status = document.getElementById('status');
+
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved !== null) pad.value = saved;
+      } catch (e) {}
+
+      if (!pad.value) pad.setSelectionRange(0, 0);
+
+      let timer;
+      const setStatus = (t)=>{ status.textContent = t; };
+      const save = ()=>{
+        try { localStorage.setItem(STORAGE_KEY, pad.value); setStatus('saved'); }
+        catch(e) { setStatus('save error'); }
+      };
+      pad.addEventListener('input', () => {
+        setStatus('saving…');
+        clearTimeout(timer);
+        timer = setTimeout(save, 400);
+      });
+
+      document.addEventListener('keydown', (e) => {
+        const mod = e.ctrlKey || e.metaKey;
+        if (!mod) return;
+
+        if (e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          downloadTxt();
+        }
+        if (e.key.toLowerCase() === 'o') {
+          e.preventDefault();
+          fileInput.click();
+        }
+        if (e.key.toLowerCase() === 'n') {
+          e.preventDefault();
+          if (!pad.value || confirm('Clear the page?')) {
+            pad.value = '';
+            save();
+          }
+        }
+      });
+
+      fileInput.addEventListener('change', async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const text = await f.text();
+        pad.value = text;
+        save();
+        fileInput.value = '';
+      });
+
+      window.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+      window.addEventListener('drop', async (e)=>{
+        e.preventDefault();
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!f) return;
+        const text = await f.text();
+        pad.value = text;
+        save();
+      });
+
+      function filenameFromFirstLine() {
+        const first = (pad.value.split(/\n/)[0] || 'notes').trim().replace(/\s+/g,'_').slice(0, 40);
+        return first || 'notes';
+      }
+
+      function downloadTxt() {
+        const blob = new Blob([pad.value], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filenameFromFirstLine() + '.txt';
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }
+
+      save();
+    })();
+  </script>
+</body>
+</html>
